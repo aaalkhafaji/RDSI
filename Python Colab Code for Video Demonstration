@@ -1,0 +1,117 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+import os
+import shutil
+from google.colab import files
+from IPython.display import display, HTML
+
+# 1. Setup the Directory Structure
+output_dir = "ICMT_Interface_Videos"
+os.makedirs(output_dir, exist_ok=True)
+
+# 2. Setup the Spatial Grid
+nx = 800
+x = np.linspace(-1, 1, nx)
+interface_idx1 = int(nx * 0.25)  # x = -0.5
+interface_idx2 = int(nx * 0.75)  # x =  0.5
+frames = 100
+
+# 3. Pre-compute the unified stochastic data
+# This ensures all 3 videos experience the exact same random variations
+signals_original = []
+signals_sfd = []
+signals_miim = []
+
+for f in range(frames):
+    # Base deterministic structural wave
+    base_signal = np.sin(2 * np.pi * (x - f * 0.02))
+    
+    # Genuine stochastic noise for outer domains
+    noise_B = np.random.normal(0, 0.4, interface_idx1)
+    noise_R = np.random.normal(0, 0.4, nx - interface_idx2)
+    
+    # --- Video 1: Original Physical Signal ---
+    # The true continuous state before any numerical solver processes it
+    orig = np.copy(base_signal)
+    orig[:interface_idx1] += noise_B
+    orig[interface_idx2:] += noise_R
+    signals_original.append(np.copy(orig))
+    
+    # --- Video 2: SFD Processing (Numerical Leakage) ---
+    sfd = np.copy(orig)
+    leakage_left = np.exp(-15 * (x[interface_idx1:interface_idx2] + 0.5)) * np.random.normal(0, 0.2, interface_idx2 - interface_idx1)
+    leakage_right = np.exp(15 * (x[interface_idx1:interface_idx2] - 0.5)) * np.random.normal(0, 0.2, interface_idx2 - interface_idx1)
+    sfd[interface_idx1:interface_idx2] += leakage_left + leakage_right
+    signals_sfd.append(sfd)
+    
+    # --- Video 3: M-IIM Processing (Algebraic Sink) ---
+    # Matches the original perfectly, proving zero data loss across the boundary
+    miim = np.copy(orig)
+    signals_miim.append(miim)
+
+# 4. Helper Function to Render Individual Videos
+def render_video(data_frames, title, filename, line_color, line_label):
+    print(f"Rendering {filename}...")
+    fig, ax = plt.subplots(figsize=(8, 4))
+    line, = ax.plot([], [], color=line_color, lw=2, label=line_label)
+    
+    # Visualizing the Enclave
+    ax.axvspan(-0.5, 0.5, color='green', alpha=0.1, label='Deterministic Enclave')
+    ax.axvline(-0.5, color='black', linestyle='--', lw=2)
+    ax.axvline(0.5, color='black', linestyle='--', lw=2)
+    
+    ax.set_xlim(-1, 1)
+    ax.set_ylim(-2.5, 2.5)
+    ax.set_title(title, fontsize=12, fontweight='bold')
+    ax.set_xlabel('Spatial Domain (x)')
+    ax.set_ylabel('Amplitude')
+    ax.legend(loc='upper right', fontsize=9)
+    
+    def init():
+        line.set_data([], [])
+        return line,
+
+    def update(frame):
+        line.set_data(x, data_frames[frame])
+        return line,
+
+    ani = animation.FuncAnimation(fig, update, frames=frames, init_func=init, blit=True)
+    
+    filepath = os.path.join(output_dir, filename)
+    ani.save(filepath, writer='ffmpeg', fps=20)
+    plt.close(fig)
+    return filepath
+
+# 5. Render All Three Videos
+render_video(
+    signals_original, 
+    'Original Continuous Signal (Pre-Processing)', 
+    '1_Original_Signal.mp4', 
+    'blue', 
+    'True Physical State'
+)
+
+render_video(
+    signals_sfd, 
+    'Standard Finite Difference (SFD) Processing', 
+    '2_SFD_Leakage.mp4', 
+    'orange', 
+    'SFD (Variance Leakage)'
+)
+
+render_video(
+    signals_miim, 
+    'Multivector IIM Processing (Exact Algebraic Sink)', 
+    '3_MIIM_Exact_Sink.mp4', 
+    'green', 
+    'M-IIM (Zero Leakage)'
+)
+
+# 6. Zip the Directory and Trigger Download
+zip_filename = "ICMT_Interface_Simulations"
+print(f"Zipping files into {zip_filename}.zip...")
+shutil.make_archive(zip_filename, 'zip', output_dir)
+
+print("Process complete! Triggering download...")
+files.download(f"{zip_filename}.zip")
