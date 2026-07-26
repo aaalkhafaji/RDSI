@@ -7,7 +7,7 @@ from google.colab import files
 from IPython.display import display, HTML
 
 # 1. Setup the Directory Structure
-output_dir = "ICMT_Interface_Videos"
+output_dir = "CIIT_Interface_Videos"
 os.makedirs(output_dir, exist_ok=True)
 
 # 2. Setup the Spatial Grid
@@ -109,7 +109,7 @@ render_video(
 )
 
 # 6. Zip the Directory and Trigger Download
-zip_filename = "ICMT_Interface_Simulations"
+zip_filename = "CIIT_Interface_Simulations"
 print(f"Zipping files into {zip_filename}.zip...")
 shutil.make_archive(zip_filename, 'zip', output_dir)
 
